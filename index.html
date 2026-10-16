@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desvio Neon - Endless Runner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #090d16;
+            color: #ffffff;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+        canvas {
+            background: linear-gradient(180deg, #0f172a 0%, #020617 100%);
+            box-shadow: 0 0 30px rgba(56, 189, 248, 0.15);
+        }
+        .glow-text {
+            text-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+        }
+        .btn-neon {
+            background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.4);
+            transition: all 0.2s ease;
+        }
+        .btn-neon:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 25px rgba(6, 182, 212, 0.7);
+        }
+        .btn-neon:active {
+            transform: translateY(1px);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-2 sm:p-4 select-none">
+
+    <div class="relative flex flex-col items-center w-full max-w-2xl">
+        <!-- Cabeçalho -->
+        <div class="w-full flex justify-between items-center mb-3 px-2">
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-extrabold font-orbitron text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 glow-text">
+                    CYBER RUN
+                </h1>
+                <p class="text-xs text-slate-400 hidden sm:block">Desvie dos obstáculos e sobreviva!</p>
+            </div>
+            <div class="text-right font-orbitron">
+                <div class="text-xs text-slate-400">PONTUAÇÃO</div>
+                <div id="scoreDisplay" class="text-2xl sm:text-3xl font-bold text-cyan-400">0</div>
+            </div>
+        </div>
+
+        <!-- Área do Jogo -->
+        <div class="relative w-full aspect-[4/3] sm:aspect-[16/10] max-h-[70vh]">
+            <canvas id="gameCanvas" class="w-full h-full rounded-2xl border border-slate-800"></canvas>
+
+            <!-- Overlay de Início / Game Over -->
+            <div id="gameOverlay" class="absolute inset-0 bg-slate-950/85 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center p-6 text-center z-10">
+                <h2 id="overlayTitle" class="text-3xl sm:text-4xl font-black font-orbitron text-cyan-400 mb-2 glow-text">
+                    CYBER RUN
+                </h2>
+                <p id="overlaySubtitle" class="text-slate-300 text-sm sm:text-base mb-6 max-w-xs">
+                    Use as setas ou deslize na tela para desviar dos bloqueios neon.
+                </p>
+
+                <!-- Recorde no Overlay -->
+                <div id="highScoreContainer" class="mb-6 font-orbitron text-sm text-slate-400 bg-slate-900/80 px-4 py-2 rounded-xl border border-slate-800">
+                    RECORDE: <span id="highScoreDisplay" class="text-yellow-400 font-bold">0</span>
+                </div>
+
+                <button id="startBtn" class="btn-neon px-8 py-3 rounded-xl font-orbitron font-bold text-lg text-white cursor-pointer tracking-wider">
+                    JOGAR AGORA
+                </button>
+            </div>
+        </div>
+
+        <!-- Controles para Mobile -->
+        <div class="w-full grid grid-cols-2 gap-3 mt-4 sm:hidden">
+            <button id="btnLeft" class="bg-slate-800/80 active:bg-cyan-600 text-white font-orbitron py-4 rounded-xl text-xl font-bold border border-slate-700 active:scale-95 transition-all">
+                &larr; ESQUERDA
+            </button>
+            <button id="btnRight" class="bg-slate-800/80 active:bg-cyan-600 text-white font-orbitron py-4 rounded-xl text-xl font-bold border border-slate-700 active:scale-95 transition-all">
+                DIREITA &rarr;
+            </button>
+        </div>
+
+        <!-- Instruções do Teclado -->
+        <div class="hidden sm:flex items-center gap-6 mt-4 text-xs font-orbitron text-slate-400">
+            <div class="flex items-center gap-2">
+                <kbd class="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200">←</kbd>
+                <kbd class="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200">→</kbd>
+                <span>Mover</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <kbd class="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200">A</kbd>
+                <kbd class="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200">D</kbd>
+                <span>Alternativa</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuração Inicial e Elementos
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const highScoreDisplay = document.getElementById('highScoreDisplay');
+        const gameOverlay = document.getElementById('gameOverlay');
+        const overlayTitle = document.getElementById('overlayTitle');
+        const overlaySubtitle = document.getElementById('overlaySubtitle');
+        const startBtn = document.getElementById('startBtn');
+        const btnLeft = document.getElementById('btnLeft');
+        const btnRight = document.getElementById('btnRight');
+
+        // Sintetizador de Áudio simples via Web Audio API (sem arquivos externos)
+        class SoundEffects {
+            constructor() {
+                this.ctx = null;
+            }
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+            playDodge() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(600, this.ctx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            }
+            playCrash() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.3);
+            }
+        }
+
+        const sfx = new SoundEffects();
+
+        // Ajuste de Resolução Dinâmica do Canvas
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Estado do Jogo
+        let gameState = 'START'; // 'START', 'PLAYING', 'GAMEOVER'
+        let score = 0;
+        let highScore = localStorage.getItem('cyberrun_highscore') || 0;
+        highScoreDisplay.textContent = Math.floor(highScore);
+
+        let speed = 5;
+        let frameCount = 0;
+        let animationFrameId;
+
+        // Propriedades do Jogador
+        const player = {
+            lane: 1, // 0: Esquerda, 1: Centro, 2: Direita
+            targetX: 0,
+            x: 0,
+            y: 0,
+            width: 40,
+            height: 60,
+            color: '#06b6d4',
+            trail: []
+        };
+
+        // Obstáculos e Partículas
+        let obstacles = [];
+        let particles = [];
+        let stars = [];
+
+        // Inicializar estrelas de fundo
+        function initStars() {
+            stars = [];
+            for (let i = 0; i < 50; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 2 + 0.5,
+                    speed: Math.random() * 1.5 + 0.5
+                });
+            }
+        }
+
+        function getLaneX(lane) {
+            const laneWidth = canvas.width / 3;
+            return (lane * laneWidth) + (laneWidth / 2) - (player.width / 2);
+        }
+
+        function moveLeft() {
+            if (gameState !== 'PLAYING') return;
+            if (player.lane > 0) {
+                player.lane--;
+                sfx.playDodge();
+            }
+        }
+
+        function moveRight() {
+            if (gameState !== 'PLAYING') return;
+            if (player.lane < 2) {
+                player.lane++;
+                sfx.playDodge();
+            }
+        }
+
+        // Eventos de Teclado
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') moveLeft();
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') moveRight();
+        });
+
+        // Eventos Touch nos Botões do Canvas/Mobile
+        btnLeft.addEventListener('touchstart', (e) => { e.preventDefault(); moveLeft(); });
+        btnRight.addEventListener('touchstart', (e) => { e.preventDefault(); moveRight(); });
+        btnLeft.addEventListener('click', moveLeft);
+        btnRight.addEventListener('click', moveRight);
+
+        // Gestos de Deslizar (Swipe) na Tela
+        let touchStartX = 0;
+        canvas.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+        }, { passive: true });
+
+        canvas.addEventListener('touchend', (e) => {
+            const touchEndX = e.changedTouches[0].clientX;
+            const diff = touchEndX - touchStartX;
+            if (Math.abs(diff) > 30) {
+                if (diff > 0) moveRight();
+                else moveLeft();
+            }
+        }, { passive: true });
+
+        function spawnObstacle() {
+            const lane = Math.floor(Math.random() * 3);
+            const laneWidth = canvas.width / 3;
+            const obstacleWidth = laneWidth * 0.6;
+            const obstacleHeight = 35;
+
+            // Tipos de obstáculos (Cores e Formatos)
+            const types = [
+                { color: '#ef4444', glow: '#f87171' }, // Vermelho
+                { color: '#a855f7', glow: '#c084fc' }, // Roxo
+                { color: '#f59e0b', glow: '#fbbf24' }  // Laranja
+            ];
+            const type = types[Math.floor(Math.random() * types.length)];
+
+            obstacles.push({
+                x: (lane * laneWidth) + (laneWidth / 2) - (obstacleWidth / 2),
+                y: -obstacleHeight - 10,
+                width: obstacleWidth,
+                height: obstacleHeight,
+                color: type.color,
+                glow: type.glow,
+                lane: lane
+            });
+        }
+
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 25; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    size: Math.random() * 4 + 2,
+                    color: color,
+                    alpha: 1
+                });
+            }
+        }
+
+        function resetGame() {
+            score = 0;
+            speed = 6;
+            frameCount = 0;
+            obstacles = [];
+            particles = [];
+            player.lane = 1;
+            player.x = getLaneX(1);
+            player.y = canvas.height - player.height - 20;
+            player.trail = [];
+            initStars();
+            scoreDisplay.textContent = '0';
+        }
+
+        function startGame() {
+            sfx.init();
+            resetGame();
+            gameState = 'PLAYING';
+            gameOverlay.classList.add('hidden');
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            gameLoop();
+        }
+
+        function gameOver() {
+            gameState = 'GAMEOVER';
+            sfx.playCrash();
+
+            if (score > highScore) {
+                highScore = Math.floor(score);
+                localStorage.setItem('cyberrun_highscore', highScore);
+                highScoreDisplay.textContent = highScore;
+            }
+
+            overlayTitle.textContent = 'FIM DE JOGO';
+            overlaySubtitle.innerHTML = `Sua pontuação foi <span class="text-cyan-400 font-bold">${Math.floor(score)}</span>`;
+            startBtn.textContent = 'JOGAR NOVAMENTE';
+            gameOverlay.classList.remove('hidden');
+        }
+
+        function update() {
+            if (gameState !== 'PLAYING') return;
+
+            frameCount++;
+            score += 0.1;
+            scoreDisplay.textContent = Math.floor(score);
+
+            // Aumentar velocidade gradualmente
+            speed += 0.001;
+
+            // Suavizar movimento lateral do jogador
+            player.targetX = getLaneX(player.lane);
+            player.x += (player.targetX - player.x) * 0.25;
+
+            // Rastro do Jogador
+            if (frameCount % 2 === 0) {
+                player.trail.push({ x: player.x, y: player.y, alpha: 0.5 });
+                if (player.trail.length > 5) player.trail.shift();
+            }
+
+            // Atualizar rastro
+            player.trail.forEach(t => t.alpha -= 0.08);
+
+            // Fundo estelar dinâmico
+            stars.forEach(star => {
+                star.y += star.speed * (speed / 3);
+                if (star.y > canvas.height) {
+                    star.y = 0;
+                    star.x = Math.random() * canvas.width;
+                }
+            });
+
+            // Gerar Obstáculos
+            const spawnInterval = Math.max(25, Math.floor(70 - speed * 3));
+            if (frameCount % spawnInterval === 0) {
+                spawnObstacle();
+            }
+
+            // Atualizar Obstáculos
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.y += speed;
+
+                // Checar Colisão (AABB)
+                const margin = 6; // Pequeno ajuste de tolerância na hitbox
+                if (
+                    player.x + margin < obs.x + obs.width &&
+                    player.x + player.width - margin > obs.x &&
+                    player.y + margin < obs.y + obs.height &&
+                    player.y + player.height - margin > obs.y
+                ) {
+                    createExplosion(player.x + player.width / 2, player.y + player.height / 2, obs.color);
+                    gameOver();
+                    return;
+                }
+
+                // Remover se saiu da tela
+                if (obs.y > canvas.height) {
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            // Atualizar Partículas
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.03;
+                if (p.alpha <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function draw() {
+            // Limpar Tela
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Desenhar Linhas das Faixas (Pista)
+            ctx.strokeStyle = 'rgba(51, 65, 85, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([15, 15]);
+            ctx.lineDashOffset = -frameCount * (speed * 0.5);
+
+            const laneWidth = canvas.width / 3;
+            for (let i = 1; i < 3; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * laneWidth, 0);
+                ctx.lineTo(i * laneWidth, canvas.height);
+                ctx.stroke();
+            }
+            ctx.setLineDash([]); // Resetar padrão de linha
+
+            // Desenhar Estrelas de Fundo
+            ctx.fillStyle = '#cbd5e1';
+            stars.forEach(star => {
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Desenhar Rastro do Jogador
+            player.trail.forEach(t => {
+                if (t.alpha > 0) {
+                    ctx.fillStyle = `rgba(6, 182, 212, ${t.alpha * 0.4})`;
+                    ctx.beginPath();
+                    ctx.roundRect(t.x, t.y, player.width, player.height, 8);
+                    ctx.fill();
+                }
+            });
+
+            // Desenhar Jogador (Nave Cyber)
+            ctx.save();
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = player.color;
+
+            // Corpo da Nave
+            ctx.beginPath();
+            ctx.moveTo(player.x + player.width / 2, player.y);
+            ctx.lineTo(player.x + player.width, player.y + player.height);
+            ctx.lineTo(player.x + player.width / 2, player.y + player.height - 10);
+            ctx.lineTo(player.x, player.y + player.height);
+            ctx.closePath();
+            ctx.fill();
+
+            // Cabine de Luz
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(player.x + player.width / 2, player.y + player.height / 2, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // Desenhar Obstáculos
+            obstacles.forEach(obs => {
+                ctx.save();
+                ctx.shadowColor = obs.glow;
+                ctx.shadowBlur = 12;
+                ctx.fillStyle = obs.color;
+
+                ctx.beginPath();
+                ctx.roundRect(obs.x, obs.y, obs.width, obs.height, 6);
+                ctx.fill();
+
+                // Detalhes internos no obstáculo
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.fillRect(obs.x + 4, obs.y + 4, obs.width - 8, 4);
+                ctx.restore();
+            });
+
+            // Desenhar Partículas de Explosão
+            particles.forEach(p => {
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            if (gameState === 'PLAYING') {
+                animationFrameId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Eventos dos Botões do Menu
+        startBtn.addEventListener('click', startGame);
+
+        // Renderização Inicial para mostrar fundo antes de começar
+        resetGame();
+        draw();
+    </script>
+</body>
+</html>
